@@ -22,4 +22,4 @@ service 'apache' do
         service_name service
         action [:enable, :start]
 end
-
+include_recipe 'apache::website'
