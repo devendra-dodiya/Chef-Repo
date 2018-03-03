@@ -1,0 +1,415 @@
+{
+	"AWSTemplateFormatVersion" : "2010-09-09",
+	
+	"Description" : "Creation for arch through CF",
+	
+	"Parameters" : {
+		"KeyName" : {
+		"Description" : "Name of an existing EC2 KeyPair to enable SSH access to the instance",
+		"Type": "AWS::EC2::KeyPair::KeyName",
+		"ConstraintDescription" : "must be the name of an existing EC2 KeyPair."
+		},
+		"VPCName" : {
+		"Description" : "Defines VPC Name",
+		"Type" : "String",
+		"MinLength" : "5",
+		"MaxLength" : "20"
+		},
+		"InternetGatewayName" :{
+		"Description" : "Tag name for InternetGateway",
+		"Type" : "String",
+		"MinLength" : "5",
+		"MaxLength" : "20"
+		},
+		"PubSecurityGroupName" : {
+		"Description" : "Tag name for InternetGateway",
+		"Type" : "String",
+		"MinLength" : "5",
+		"MaxLength" : "20"
+		},
+		"PubSubnetName" :{
+		"Description" : "Tag name for InternetGateway",
+		"Type" : "String",
+		"MinLength" : "5",
+		"MaxLength" : "20"
+		},
+		"PubRouteTableName" : {
+		"Description" : "Public Route Table",
+		"Type" : "String"
+		},
+		"PriSubnetName" :{
+		"Description" : "Tag name for InternetGateway",
+		"Type" : "String",
+		"MinLength" : "5",
+		"MaxLength" : "20"
+		},
+		"PriRouteTableName" : {
+		"Description" : "Public Route Table",
+		"Type" : "String"
+		},
+		"PubEC2InstanceName1" :{
+		"Description" : "Public Instance",
+		"Type" : "String"
+		},
+		"PubEC2InstanceName2" :{
+		"Description" : "Public Instance",
+		"Type" : "String"
+		},
+		"PriEC2InstanceName1" :{
+		"Description" : "Public Instance",
+		"Type" : "String"
+		},
+		"PriEC2InstanceName2" :{
+		"Description" : "Public Instance",
+		"Type" : "String"
+		},
+		"EC2InstanceType" : {
+		"Description" : "Public Route Table",
+		"Type" : "String",
+		"Default" : "t2.micro",
+		"AllowedValues":[  
+            "t2.small",
+            "t2.nano",
+            "t2.micro",
+            "t2.medium",
+            "t2.large"
+         ]
+		},
+		"SSHLocation":{  
+         "Description":"IP address range that can be used to ssh EC2 instance",
+         "Type":"String",
+         "MinLength":"9",
+         "MaxLength":"18",
+         "Default":"0.0.0.0/0",
+         "ConstraintDescription":"must be valid IP CIDR range of the form of x.x.x.x/x"
+      }
+	},
+
+	"Mappings" : {
+		"AWSInstanceType2Arch" : {
+			"t1.micro"    : { "Arch" : "PV64"   },
+			"t2.nano"     : { "Arch" : "HVM64"  },
+			"t2.micro"    : { "Arch" : "HVM64"  },
+			"t2.small"    : { "Arch" : "HVM64"  },
+			"t2.medium"   : { "Arch" : "HVM64"  },
+			"t2.large"    : { "Arch" : "HVM64"  },
+			"m1.small"    : { "Arch" : "PV64"   },
+			"m1.medium"   : { "Arch" : "PV64"   },
+			"m1.large"    : { "Arch" : "PV64"   },
+			"m1.xlarge"   : { "Arch" : "PV64"   }
+		},
+		"AWSRegionArch2AMI" : {
+			"us-east-1"        : {"PV64" : "ami-22111148", "HVM64" : "ami-08111162", "HVMG2" : "ami-ebcec381"},
+			"us-west-2"        : {"PV64" : "ami-792bc219", "HVM64" : "ami-c229c0a2", "HVMG2" : "ami-0f28c06f"},
+			"us-west-1"        : {"PV64" : "ami-0e087a6e", "HVM64" : "ami-1b0f7d7b", "HVMG2" : "ami-ab9defcb"}
+		}
+	},
+	
+	"Resources" : {
+		"VZWVPC" : {
+			"Type" : "AWS::EC2::VPC",
+			"Properties" : {
+				"CidrBlock" : "10.0.0.0/16",
+				"EnableDnsSupport" : "True",
+				"EnableDnsHostnames" : "True",
+				"Tags" : [
+				{"Key" : "Name" , "Value" : {"Ref" : "VPCName"}},
+				{ "Key" : "Application", "Value" : { "Ref" : "AWS::StackName" } },
+				{"Key" : "Network" , "Value" : "Public"}
+				]
+			}
+		},
+		
+		"VZWIGW" : {
+			"Type" : "AWS::EC2::InternetGateway",
+			"Properties" : {
+				"Tags" : [
+				{"Key" : "Name", "Value" : {"Ref" : "InternetGatewayName"}},
+				{ "Key" : "Application", "Value" : { "Ref" : "AWS::StackName" } },
+				{"Key" : "Network", "Value" : "Public"}
+				]
+			}
+		},
+		
+		"VZWATTIGW" : {
+			"Type" : "AWS::EC2::VPCGatewayAttachment",
+			"Properties" : {
+				"VpcId" : {"Ref" : "VZWVPC"},
+				"InternetGatewayId" : {"Ref" : "VZWIGW"}
+				}
+		},
+		
+		"VZWPubSub" : {
+			"Type" : "AWS::EC2::Subnet",
+			"Properties" : {
+				"CidrBlock" : "10.0.0.0/24",
+				"VpcId" : {"Ref" : "VZWVPC"},
+				"AvailabilityZone" : { "Fn::Select" : ["0", { "Fn::GetAZs" : {"Ref" : "AWS::Region"} } ]},
+				"Tags" : [
+				{"Key"  : "Name", "Value" : {"Ref" : "PubSubnetName"}},
+				{ "Key" : "Application", "Value" : { "Ref" : "AWS::StackName" } },
+				{"Key" : "Network", "Value" : "Public"}
+				]
+				}
+			},
+	    
+		"VZWPubRouteTable" : {
+			"Type" : "AWS::EC2::RouteTable",
+			"Properties" : {
+				"VpcId" : {"Ref" : "VZWVPC"},
+				"Tags" : [
+				{"Key" : "Name" , "Value" : {"Ref" : "PubRouteTableName"}},
+				{ "Key" : "Application", "Value" : { "Ref" : "AWS::StackName" } }
+				]
+				}
+			},
+		
+		"VZWRoute" : {
+			"Type" : "AWS::EC2::Route",
+			"DependsOn" : "VZWATTIGW",
+			"Properties" : {
+				"RouteTableId" : {"Ref" : "VZWPubRouteTable"},
+				"DestinationCidrBlock" : "0.0.0.0/0",
+				"GatewayId" : {"Ref" : "VZWIGW"}
+				}
+			},
+		
+		"VZWSubnetAssToRoutetable" : {
+			"Type" : "AWS::EC2::SubnetRouteTableAssociation",
+			"Properties" : {
+				"RouteTableId" : {"Ref" : "VZWPubRouteTable"},
+				"SubnetId" : {"Ref" : "VZWPubSub"}
+				}
+			},
+			
+		"VZWPriSub" : {
+			"Type" : "AWS::EC2::Subnet",
+			"Properties" : {
+				"CidrBlock" : "10.0.1.0/24",
+				"VpcId" : {"Ref" : "VZWVPC"},
+				"AvailabilityZone" : { "Fn::Select" : ["1", { "Fn::GetAZs" : {"Ref" : "AWS::Region"} } ]},
+				"Tags" : [
+				{"Key"  : "Name", "Value" : {"Ref" : "PriSubnetName"}},
+				{ "Key" : "Application", "Value" : { "Ref" : "AWS::StackName" } },
+				{"Key" : "Network", "Value" : "Public"}
+				]
+				}
+			},
+	    
+		"VZWPriRouteTable" : {
+			"Type" : "AWS::EC2::RouteTable",
+			"Properties" : {
+				"VpcId" : {"Ref" : "VZWVPC"},
+				"Tags" : [
+				{"Key" : "Name" , "Value" : {"Ref" : "PriRouteTableName"}},
+				{ "Key" : "Application", "Value" : { "Ref" : "AWS::StackName" } }
+				]
+				}
+			},
+		
+		"VZWPriSubnetAssToRoutetable" : {
+			"Type" : "AWS::EC2::SubnetRouteTableAssociation",
+			"Properties" : {
+				"RouteTableId" : {"Ref" : "VZWPriRouteTable"},
+				"SubnetId" : {"Ref" : "VZWPriSub"}
+				}
+			},
+			
+		"EC2Instance1" : {
+			"Type" : "AWS::EC2::Instance",
+			"Properties" : {
+				"InstanceType" : {"Ref" : "EC2InstanceType"},
+				"KeyName" : {"Ref" : "KeyName"},
+				"ImageId" : { "Fn::FindInMap" : [ "AWSRegionArch2AMI", { "Ref" : "AWS::Region" },
+                          { "Fn::FindInMap" : [ "AWSInstanceType2Arch", { "Ref" : "EC2InstanceType" }, "Arch" ] } 
+                      ] 
+                    },
+				"NetworkInterfaces" : [{
+					"AssociatePublicIpAddress" : "True",
+					"DeviceIndex" : "0",
+					"DeleteOnTermination" : "True",
+					"SubnetId" : {"Ref" : "VZWPubSub"}
+					}],
+				"Tags" : [
+				{"Key" : "Name" , "Value" : {"Ref" : "PubEC2InstanceName1"}},
+				{ "Key" : "Application", "Value" : { "Ref" : "AWS::StackName" } }
+				]
+			}
+		},
+		"EC2Instance2" : {
+			"Type" : "AWS::EC2::Instance",
+			"Properties" : {
+				"InstanceType" : {"Ref" : "EC2InstanceType"},
+				"KeyName" : {"Ref" : "KeyName"},
+				"ImageId" : { "Fn::FindInMap" : [ "AWSRegionArch2AMI", { "Ref" : "AWS::Region" },
+                          { "Fn::FindInMap" : [ "AWSInstanceType2Arch", { "Ref" : "EC2InstanceType" }, "Arch" ] } 
+                      ] 
+                    },
+				"NetworkInterfaces" : [{
+					"AssociatePublicIpAddress" : "True",
+					"DeviceIndex" : "0",
+					"DeleteOnTermination" : "True",
+					"SubnetId" : {"Ref" : "VZWPubSub"}
+					}],
+				"Tags" : [
+				{"Key" : "Name" , "Value" : {"Ref" : "PubEC2InstanceName2"}},
+				{ "Key" : "Application", "Value" : { "Ref" : "AWS::StackName" } }
+				]
+			}
+		},
+		"EC2Instance3" : {
+			"Type" : "AWS::EC2::Instance",
+			"Properties" : {
+				"InstanceType" : {"Ref" : "EC2InstanceType"},
+				"KeyName" : {"Ref" : "KeyName"},
+				"ImageId" : { "Fn::FindInMap" : [ "AWSRegionArch2AMI", { "Ref" : "AWS::Region" },
+                          { "Fn::FindInMap" : [ "AWSInstanceType2Arch", { "Ref" : "EC2InstanceType" }, "Arch" ] } 
+                      ] 
+                    },
+				"NetworkInterfaces" : [{
+					"AssociatePublicIpAddress" : "False",
+					"DeviceIndex" : "0",
+					"DeleteOnTermination" : "True",
+					"SubnetId" : {"Ref" : "VZWPriSub"}
+					}],
+				"Tags" : [
+				{"Key" : "Name" , "Value" : {"Ref" : "PriEC2InstanceName1"}},
+				{ "Key" : "Application", "Value" : { "Ref" : "AWS::StackName" } }
+				]
+			}
+		},
+        "EC2Instance4" : {
+			"Type" : "AWS::EC2::Instance",
+			"Properties" : {
+				"InstanceType" : {"Ref" : "EC2InstanceType"},
+				"KeyName" : {"Ref" : "KeyName"},
+				"ImageId" : { "Fn::FindInMap" : [ "AWSRegionArch2AMI", { "Ref" : "AWS::Region" },
+                          { "Fn::FindInMap" : [ "AWSInstanceType2Arch", { "Ref" : "EC2InstanceType" }, "Arch" ] } 
+                      ] 
+                    },
+				"NetworkInterfaces" : [{
+					"AssociatePublicIpAddress" : "False",
+					"DeviceIndex" : "0",
+					"DeleteOnTermination" : "True",
+					"SubnetId" : {"Ref" : "VZWPriSub"}
+					}],
+				"Tags" : [
+				{"Key" : "Name" , "Value" : {"Ref" : "PriEC2InstanceName2"}},
+				{ "Key" : "Application", "Value" : { "Ref" : "AWS::StackName" } }
+				]
+			}
+		},
+		"ElasticLoadBalancer" : {
+			"Type" : "AWS::ElasticLoadBalancing::LoadBalancer",
+			"Properties" : {
+				"AvailabilityZones" : { "Fn::GetAZs" : "" },
+				"Instances" : [ { "Ref" : "EC2Instance1" },{ "Ref" : "EC2Instance2" } ],
+				"ConnectionDrainingPolicy" : {
+				"Enabled" : "true",
+				"Timeout" : "60"
+				},
+				"LoadBalancerName" : "VZWPubELB",
+				"CrossZone" : "true",
+				"Listeners" : [ {
+						"LoadBalancerPort": "80",
+                        "InstancePort": "80",
+                        "Protocol": "HTTP"
+				} ],
+				"HealthCheck" : {
+					"Target": "HTTP:80/",
+					"HealthyThreshold" : "3",
+					"UnhealthyThreshold" : "5",
+					"Interval" : "30",
+					"Timeout" : "5"
+				}
+				
+			}
+		},
+		"ElasticLoadBalancer2" : {
+			"Type" : "AWS::ElasticLoadBalancing::LoadBalancer",
+			"Properties" : {
+				"AvailabilityZones" : { "Fn::GetAZs" : "" },
+				"Instances" : [ { "Ref" : "EC2Instance3" },{ "Ref" : "EC2Instance4" } ],
+				"ConnectionDrainingPolicy" : {
+				"Enabled" : "true",
+				"Timeout" : "60"
+				},
+				"LoadBalancerName" : "VZWPubELB",
+				"CrossZone" : "true",
+				"Listeners" : [ {
+						"LoadBalancerPort": "22",
+                        "InstancePort": "22",
+                        "Protocol": "TCP"
+				} ],
+				"HealthCheck" : {
+					"Target": "HTTP:80/",
+					"HealthyThreshold" : "3",
+					"UnhealthyThreshold" : "5",
+					"Interval" : "30",
+					"Timeout" : "5"
+				}
+				
+			}
+		}		
+		
+	},
+	
+	"Outputs" : {
+		"InstanceId1" :{
+			"Description" : " ID for newly created instance",
+			"Value" : {"Ref" : "EC2Instance1"} 
+		},
+		"AZ1" : {
+			"Description" : "AZ for instance ID",
+			"Value" : {"Fn::GetAtt" : [ "EC2Instance1", "AvailabilityZone"]}
+		},
+		"PublicDnsName1" : {
+			"Description" : "Public IP for instance",
+			"Value" : {"Fn::GetAtt" : [ "EC2Instance1" , "PublicIp" ]}
+		},
+		"PublicIP1" :{
+			"Description" : "Public DNS Name",
+			"Value" : {"Fn::GetAtt" : [ "EC2Instance1" , "PublicDnsName" ]}
+		},
+		"InstanceId2" :{
+			"Description" : " ID for newly created instance",
+			"Value" : {"Ref" : "EC2Instance2"} 
+		},
+		"AZ2" : {
+			"Description" : "AZ for instance ID",
+			"Value" : {"Fn::GetAtt" : [ "EC2Instance2", "AvailabilityZone"]}
+		},
+		"PublicDnsName2" : {
+			"Description" : "Public IP for instance",
+			"Value" : {"Fn::GetAtt" : [ "EC2Instance2" , "PublicIp" ]}
+		},
+		"PublicIP2" :{
+			"Description" : "Public DNS Name",
+			"Value" : {"Fn::GetAtt" : [ "EC2Instance2" , "PublicDnsName" ]}
+		},
+		"InstanceId3" :{
+			"Description" : " ID for newly created instance",
+			"Value" : {"Ref" : "EC2Instance3"} 
+		},
+		"AZ3" : {
+			"Description" : "AZ for instance ID",
+			"Value" : {"Fn::GetAtt" : [ "EC2Instance3", "AvailabilityZone"]}
+		},
+		"PrivateIP1" :{
+			"Description" : "Public DNS Name",
+			"Value" : {"Fn::GetAtt" : [ "EC2Instance3" , "PrivateIp" ]}
+		},
+        "InstanceId4" :{
+			"Description" : " ID for newly created instance",
+			"Value" : {"Ref" : "EC2Instance4"} 
+		},
+		"AZ4" : {
+			"Description" : "AZ for instance ID",
+			"Value" : {"Fn::GetAtt" : [ "EC2Instance4", "AvailabilityZone"]}
+		},
+		"PrivateIP2" : {
+			"Description" : "Public IP for instance",
+			"Value" : {"Fn::GetAtt" : [ "EC2Instance4" , "PrivateIp" ]}
+		}
+	}
+}
